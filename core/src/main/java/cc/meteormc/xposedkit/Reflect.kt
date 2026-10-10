@@ -3,8 +3,10 @@
 
 package cc.meteormc.xposedkit
 
+import android.os.Build
 import cc.meteormc.xposedkit.nativelib.NativeBridge
 import cc.meteormc.xposedkit.util.Primitives
+import sun.misc.Unsafe
 import java.lang.reflect.AccessibleObject
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
@@ -12,12 +14,19 @@ import java.lang.reflect.Member
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.WeakHashMap
+import kotlin.Byte
+import kotlin.Float
+import kotlin.Long
+import kotlin.Short
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.InvocationKind
 import kotlin.contracts.contract
 import kotlin.reflect.KClass
 
 private val cache = WeakHashMap<Class<*>, Reflect<*>>()
+private val theUnsafe by lazy {
+    Unsafe::class.reflect.field("theUnsafe")!!.get<Unsafe>(null)
+}
 
 val <T : Any> Class<T>.reflect: Reflect<T>
     get() = cache.getOrPut(this) { Reflect(this) } as Reflect<T>
@@ -347,6 +356,104 @@ fun <T> Method.callSpecial(obj: Any, vararg args: Any?): T {
 
 fun <T> Field.get(obj: Any?): T {
     return this.setAccessible()[obj] as T
+}
+
+fun Field.put(obj: Any?, value: Any?) {
+    val isVolatile = Modifier.isVolatile(modifiers)
+    val isImmutable = Modifier.isStatic(modifiers) && Modifier.isFinal(modifiers)
+    // 从 Android 17 的第一个 Beta 开始 无法通过反射修改 static final 的字段
+    // https://android-developers.googleblog.com/2026/02/the-first-beta-of-android-17.html
+    if (
+        !isImmutable ||
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA ||
+        (Build.VERSION.SDK_INT == Build.VERSION_CODES.BAKLAVA && Build.VERSION.PREVIEW_SDK_INT < 1)
+    ) {
+        try {
+            this.setAccessible()[obj] = value
+            return
+        } catch (t: Throwable) {
+            // 跳过处理非 static final 字段的异常
+            if (!isImmutable) throw t
+        }
+    }
+
+    // 提前解析字段以便读取正确的偏移量
+    get(obj)
+    val base = declaringClass
+    val offset = Field::class.java.reflect.field("offset")!!.get<Long>(this)
+    when (type) {
+        Boolean::class.javaPrimitiveType -> {
+            value!! as Boolean
+            if (!isVolatile) {
+                theUnsafe.putBoolean(base, offset, value)
+            } else {
+//                theUnsafe.putBooleanVolatile(base, offset, value)
+            }
+        }
+        Byte::class.javaPrimitiveType -> {
+            value!! as Byte
+            if (!isVolatile) {
+                theUnsafe.putByte(base, offset, value)
+            } else {
+//                theUnsafe.putByteVolatile(base, offset, value)
+            }
+        }
+        Char::class.javaPrimitiveType -> {
+            value!! as Char
+            if (!isVolatile) {
+                theUnsafe.putChar(base, offset, value)
+            } else {
+//                theUnsafe.putCharVolatile(base, offset, value)
+            }
+        }
+        Short::class.javaPrimitiveType -> {
+            value!! as Short
+            if (!isVolatile) {
+                theUnsafe.putShort(base, offset, value)
+            } else {
+//                theUnsafe.putShortVolatile(base, offset, value)
+            }
+        }
+        Int::class.javaPrimitiveType -> {
+            value!! as Int
+            if (!isVolatile) {
+                theUnsafe.putInt(base, offset, value)
+            } else {
+                theUnsafe.putIntVolatile(base, offset, value)
+            }
+        }
+        Long::class.javaPrimitiveType -> {
+            value!! as Long
+            if (!isVolatile) {
+                theUnsafe.putLong(base, offset, value)
+            } else {
+                theUnsafe.putLongVolatile(base, offset, value)
+            }
+        }
+        Double::class.javaPrimitiveType -> {
+            value!! as Double
+            if (!isVolatile) {
+                theUnsafe.putDouble(base, offset, value)
+            } else {
+                theUnsafe.putLongVolatile(base, offset, value.toRawBits())
+            }
+        }
+        Float::class.javaPrimitiveType -> {
+            value!! as Float
+            if (!isVolatile) {
+                theUnsafe.putFloat(base, offset, value)
+            } else {
+                theUnsafe.putIntVolatile(base, offset, value.toRawBits())
+            }
+        }
+        else -> {
+            if (!isVolatile) {
+                theUnsafe.putObject(base, offset, value)
+            } else {
+                theUnsafe.putObjectVolatile(base, offset, value)
+            }
+        }
+    }
 }
 
 fun <T : AccessibleObject> T.setAccessible(): T {
