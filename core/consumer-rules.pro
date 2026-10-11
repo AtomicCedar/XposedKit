@@ -1,6 +1,16 @@
--keepnames class cc.meteormc.xposedkit.engine.**
--keep,allowoptimization,allowobfuscation class cc.meteormc.xposedkit.engine.** { *; }
--keep,allowoptimization,allowobfuscation class * extends cc.meteormc.xposedkit.XposedModule { *; }
+# 保留各个 Engine 的实现类名称 供框架定位实现类
+-keepnames class * extends cc.meteormc.xposedkit.engine.Engine
+# 防止删除或混淆 Engine 接口类成员 以避免破坏继承关系（此规则可传播至子类）
+-keepclassmembers,allowoptimization class cc.meteormc.xposedkit.engine.Engine { *; }
+# 保留 Engine 实现类的构造函数以便框架创建入口
+-keepclassmembers,allowoptimization class * extends cc.meteormc.xposedkit.engine.Engine { <init>(...); }
+
+# 保留模块的实现类
+-keep,allowoptimization,allowobfuscation class * extends cc.meteormc.xposedkit.XposedModule
+# 禁止删除模块基类的成员（此规则可传播至子类）
+-keepclassmembers,allowoptimization,allowobfuscation class cc.meteormc.xposedkit.XposedModule { *; }
+# 保留模块实现类的构造函数 供内部获取模块实例
+-keepclassmembers,allowoptimization class * extends cc.meteormc.xposedkit.XposedModule { <init>(); }
 
 -dontwarn android.app.AndroidAppHelper
 -dontwarn android.content.res.XModuleResources
