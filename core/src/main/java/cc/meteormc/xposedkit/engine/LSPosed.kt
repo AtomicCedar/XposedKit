@@ -10,11 +10,11 @@ import androidx.annotation.RequiresApi
 import cc.meteormc.xposedkit.XLog
 import cc.meteormc.xposedkit.XposedKit
 import cc.meteormc.xposedkit.XposedKit.TAG
+import cc.meteormc.xposedkit.engine.LSPosed.HookIdentifier.Companion.toId
 import cc.meteormc.xposedkit.hook.HookHandle
 import cc.meteormc.xposedkit.hook.HookType
 import cc.meteormc.xposedkit.hook.InvokeCallback
 import cc.meteormc.xposedkit.hook.InvokeInfo
-import cc.meteormc.xposedkit.engine.LSPosed.HookIdentifier.Companion.toId
 import cc.meteormc.xposedkit.nativelib.NativeBridge
 import cc.meteormc.xposedkit.param.HotReloadingParam
 import cc.meteormc.xposedkit.param.PackageLoadedParam
