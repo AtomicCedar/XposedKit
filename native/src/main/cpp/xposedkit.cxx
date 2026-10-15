@@ -18,6 +18,7 @@ import :thread;
 
 import :java_primitive;
 import :jni_helper;
+import :plugin_loader;
 
 namespace {
     jvmtiEnv* gJvmti = nullptr;
@@ -53,21 +54,35 @@ JNIEXPORT void JNICALL
 Java_cc_meteormc_xposedkit_nativelib_NativeBridge_Init(JNIEnv *env, jclass clazz) {
     xposedkit::art::ArtMethod::Init(env);
 
-    auto runtime = xposedkit::art::Runtime::Current();
-    if (!runtime->EnsurePluginLoaded("libopenjdkjvmti.so", nullptr)) {
-        // TODO: 支持Android7及以下无jvmti的设备
-    } else {
-        JavaVM* vm;
-        env->GetJavaVM(&vm);
-        if (vm->GetEnv(reinterpret_cast<void**>(&gJvmti), 0x40000000 | JVMTI_VERSION_1_2) != JNI_OK) {
-            env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Failed to get JVMTI environment");
-            return;
-        }
+    std::string error_msg;
+    bool plugin_loaded = false;
 
-        jvmtiCapabilities caps{};
-        caps.can_tag_objects = 1;
-        gJvmti->AddCapabilities(&caps);
+    if (auto runtime = xposedkit::art::Runtime::Current()) {
+        plugin_loaded = runtime->EnsurePluginLoaded("libopenjdkjvmti.so", &error_msg);
     }
+
+    // art::Runtime::EnsurePluginLoaded is no longer exported on newer ART releases,
+    // so load the plugin ourselves in that case.
+    if (!plugin_loaded) {
+        plugin_loaded = xposedkit::PluginLoader::Load("libopenjdkjvmti.so");
+    }
+
+    if (!plugin_loaded) {
+        // TODO: 支持Android7及以下无jvmti的设备
+        return;
+    }
+
+    JavaVM* vm;
+    env->GetJavaVM(&vm);
+    if (vm == nullptr || vm->GetEnv(reinterpret_cast<void**>(&gJvmti), 0x40000000 | JVMTI_VERSION_1_2) != JNI_OK) {
+        gJvmti = nullptr;
+        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Failed to get JVMTI environment");
+        return;
+    }
+
+    jvmtiCapabilities caps{};
+    caps.can_tag_objects = 1;
+    gJvmti->AddCapabilities(&caps);
 }
 
 extern "C"
@@ -189,7 +204,32 @@ Java_cc_meteormc_xposedkit_nativelib_NativeBridge_FindClassInitializer(JNIEnv *e
     }
 
     auto self = xposedkit::art::Thread::Current();
-    auto mirror = (xposedkit::art::mirror::Class*) self->DecodeJObject(clazz);
+    if (self == nullptr) {
+        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Failed to get the current art::Thread");
+        return nullptr;
+    }
+
+    // Newer ART only exposes DecodeGlobalJObject, which requires a global reference.
+    // On releases that still export DecodeJObject the original reference is passed through
+    // untouched, so behaviour there is unchanged.
+    jobject global = nullptr;
+    if (xposedkit::art::Thread::RequiresGlobalReference()) {
+        global = env->NewGlobalRef(clazz);
+        if (global == nullptr) {
+            return nullptr;
+        }
+    }
+
+    auto mirror = (xposedkit::art::mirror::Class*) self->DecodeJObject(global != nullptr ? global : clazz);
+    if (global != nullptr) {
+        env->DeleteGlobalRef(global);
+    }
+
+    if (mirror == nullptr) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Unsupported ART version");
+        return nullptr;
+    }
+
     auto method = mirror->FindClassInitializer();
     if (!method) {
         return nullptr;
@@ -204,6 +244,11 @@ Java_cc_meteormc_xposedkit_nativelib_NativeBridge_VisitHeapObjects(JNIEnv *env, 
                                                                    jclass clazz) {
     if (!clazz) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "clazz is null");
+        return nullptr;
+    }
+
+    if (gJvmti == nullptr) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "JVMTI is not available in this process");
         return nullptr;
     }
 

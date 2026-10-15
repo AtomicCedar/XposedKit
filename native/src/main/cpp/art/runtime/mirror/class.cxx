@@ -33,6 +33,10 @@ namespace xposedkit::art::mirror {
 
     public:
         ArtMethod* FindClassInitializer() {
+            if (FindClassInitializer_ == nullptr) {
+                return nullptr;
+            }
+
             return FindClassInitializer_(this, sizeof(void*));
         }
 
