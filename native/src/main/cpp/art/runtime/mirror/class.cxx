@@ -22,18 +22,20 @@ namespace xposedkit::art::mirror {
 
     private:
         inline static auto FindClassInitializer_ = [] {
+            using Fn = ArtMethod* (*)(Class*, size_t);
+
             if (auto fn = SymbolResolver::Find<ArtMethod* (*)(Class*, PointerSize)>("_ZN3art6mirror5Class20FindClassInitializerENS_11PointerSizeE")) {
                 // Android8及以上
-                return reinterpret_cast<ArtMethod* (*)(Class*, size_t)>(fn);
+                return reinterpret_cast<Fn>(fn);
             }
 
             // Android7及以下
-            return SymbolResolver::Find<ArtMethod* (*)(Class*, size_t)>("_ZN3art6mirror5Class20FindClassInitializerE" SIZE_T_MANGLE);
+            return SymbolResolver::Find<Fn>("_ZN3art6mirror5Class20FindClassInitializerE" SIZE_T_MANGLE);
         }();
 
     public:
         ArtMethod* FindClassInitializer() {
-            if (FindClassInitializer_ == nullptr) {
+            if (!FindClassInitializer_) {
                 return nullptr;
             }
 

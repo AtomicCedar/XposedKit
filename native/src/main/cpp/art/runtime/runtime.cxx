@@ -17,7 +17,7 @@ private:
 
 public:
     inline static Runtime* Current() {
-        if (Current_ == nullptr) {
+        if (!Current_) {
             return nullptr;
         }
 
@@ -25,9 +25,7 @@ public:
     }
 
     bool EnsurePluginLoaded(const char* plugin_name, std::string* error_msg) {
-        // Recent ART builds hide art::Runtime, so this symbol may be missing.
-        // Never call through a null pointer; callers fall back to PluginLoader.
-        if (EnsurePluginLoaded_ == nullptr) {
+        if (!EnsurePluginLoaded_) {
             return false;
         }
 

@@ -204,38 +204,30 @@ Java_cc_meteormc_xposedkit_nativelib_NativeBridge_FindClassInitializer(JNIEnv *e
     }
 
     auto self = xposedkit::art::Thread::Current();
-    if (self == nullptr) {
-        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Failed to get the current art::Thread");
+    if (!self) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to get current thread");
         return nullptr;
     }
 
-    // Newer ART only exposes DecodeGlobalJObject, which requires a global reference.
-    // On releases that still export DecodeJObject the original reference is passed through
-    // untouched, so behaviour there is unchanged.
-    jobject global = nullptr;
-    if (xposedkit::art::Thread::RequiresGlobalReference()) {
-        global = env->NewGlobalRef(clazz);
-        if (global == nullptr) {
-            return nullptr;
-        }
+    jobject global = env->NewGlobalRef(clazz);
+    if (!global) {
+        return nullptr;
     }
 
-    auto mirror = (xposedkit::art::mirror::Class*) self->DecodeJObject(global != nullptr ? global : clazz);
-    if (global != nullptr) {
+    auto mirror = (xposedkit::art::mirror::Class*) self->DecodeGlobalJObject(global);
+    if (!mirror) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode global reference");
         env->DeleteGlobalRef(global);
-    }
-
-    if (mirror == nullptr) {
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Unsupported ART version");
         return nullptr;
     }
 
-    auto method = mirror->FindClassInitializer();
-    if (!method) {
+    auto clinit = mirror->FindClassInitializer();
+    env->DeleteGlobalRef(global);
+    if (!clinit) {
         return nullptr;
     }
 
-    return env->ToReflectedMethod(clazz, reinterpret_cast<jmethodID>(method), true);
+    return env->ToReflectedMethod(clazz, reinterpret_cast<jmethodID>(clinit), true);
 }
 
 extern "C"
@@ -247,8 +239,8 @@ Java_cc_meteormc_xposedkit_nativelib_NativeBridge_VisitHeapObjects(JNIEnv *env, 
         return nullptr;
     }
 
-    if (gJvmti == nullptr) {
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "JVMTI is not available in this process");
+    if (!gJvmti) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "JVMTI environment is not available");
         return nullptr;
     }
 
