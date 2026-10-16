@@ -7,6 +7,7 @@ import android.os.Build
 import cc.meteormc.xposedkit.nativelib.NativeBridge
 import cc.meteormc.xposedkit.util.Primitives
 import cc.meteormc.xposedkit.util.UnsafeMemory
+import org.lsposed.hiddenapibypass.HiddenApiBypass
 import sun.misc.Unsafe
 import java.lang.reflect.AccessibleObject
 import java.lang.reflect.Constructor
@@ -106,10 +107,10 @@ inline fun <T : Any, R> ClassLoader.typedReflect(className: String, block: Refle
 }
 
 class Reflect<T : Any>(val type: Class<T>) {
-    private val nestedClassCache = mutableMapOf<String, Class<*>?>()
-    private val constructorCache = mutableMapOf<String, Constructor<*>?>()
-    private val methodCache = mutableMapOf<String, Method?>()
-    private val fieldCache = mutableMapOf<String, Field?>()
+    private val nestedClassCache = mutableMapOf<Any, Class<*>?>()
+    private val constructorCache = mutableMapOf<Any, Constructor<*>?>()
+    private val methodCache = mutableMapOf<Any, Method?>()
+    private val fieldCache = mutableMapOf<Any, Field?>()
 
     val singleton by lazy {
         runCatching {
@@ -127,111 +128,154 @@ class Reflect<T : Any>(val type: Class<T>) {
         }
     }
 
-    val nestedClasses
+    inline val nestedClasses
         get() = type.classes.toList()
 
-    val declaredNestedClasses
+    inline val declaredNestedClasses
         get() = type.declaredClasses.toList()
 
     fun constructor(vararg paramTypes: Class<*>) = constructorCache.getOrPut(getParametersString(*paramTypes)) {
         runCatching {
-            type.getDeclaredConstructor(*paramTypes).setAccessible()
-        }.getOrNull()
+            type.getDeclaredConstructor(*paramTypes)
+        }.getOrElse {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                runCatching { HiddenApiBypass.getDeclaredConstructor(type, *paramTypes) }.getOrNull()
+            } else {
+                null
+            }
+        }?.setAccessible()
     } as? Constructor<T>
 
-    val constructors
+    fun constructor(matcher: ConstructorMatcher) = constructorCache.getOrPut(matcher) {
+        if (!matcher.isHidden || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            declaredConstructors
+        } else {
+            HiddenApiBypass.getDeclaredMethods(type).filterIsInstance<Constructor<*>>()
+        }.firstOrNull {
+            matcher.matches(it)
+        }?.setAccessible()
+    } as? Constructor<T>
+
+    inline fun constructor(matcher: ConstructorMatcher.() -> Unit): Constructor<T>? {
+        contract {
+            callsInPlace(matcher, InvocationKind.EXACTLY_ONCE)
+        }
+        return constructor(ConstructorMatcher().apply(matcher))
+    }
+
+    inline val constructors
         get() = type.constructors.setAccessible()
 
-    val declaredConstructors
+    inline val declaredConstructors
         get() = type.declaredConstructors.map {
             (it as Constructor<T>).setAccessible()
         }
 
-    fun method(name: String, vararg paramTypes: Class<*>) = methodCache.getOrPut(name + getParametersString(*paramTypes)) {
-        firstRecursive {
-            runCatching {
-                it.getDeclaredMethod(name, *paramTypes).setAccessible()
-            }.getOrNull()
-        }
-    }
-
-    fun method(name: String) = methodCache.getOrPut("$name(*)") {
+    fun method(name: String) = methodCache.getOrPut("$name[*]") {
         method(name, *emptyArray<Class<*>>())?.let {
             return@getOrPut it
         }
 
-        // 先按继承层级取最优先匹配的类
-        // 再在该类的重载中取唯一的方法
-        // 并忽略父类声明的同名方法
-        methods(name)
-            .groupBy { it.declaringClass }
-            .entries
-            .firstOrNull()
-            ?.value
-            ?.singleOrNull()
+        method {
+            this.name = name
+        }
     }
 
-    fun method(vararg paramTypes: Class<*>?) = methodCache.getOrPut(getParametersString(*paramTypes) + "(*)") {
-        methods(*paramTypes).singleOrNull()
+    fun method(vararg paramTypes: Class<*>?) = methodCache.getOrPut(getParametersString(*paramTypes) + "[*]") {
+        method {
+            this.paramTypes = paramTypes
+        }
     }
 
-    fun methods(name: String): List<Method> {
-        val exists = mutableSetOf<String>()
-        return findRecursive {
-            it.declaredMethods.filter { method ->
-                // 仅保留继承链中最先匹配到的类的方法（优先子类）
-                // 忽略父类被覆盖的方法
-                name.contentEquals(method.name) && exists.add(method.signature())
+    fun method(name: String, vararg paramTypes: Class<*>) = methodCache.getOrPut(name + getParametersString(*paramTypes)) {
+        firstRecursive {
+            runCatching {
+                it.getDeclaredMethod(name, *paramTypes)
+            }.getOrElse { _ ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    runCatching { HiddenApiBypass.getDeclaredMethod(it, name, *paramTypes) }.getOrNull()
+                } else {
+                    null
+                }
             }
-        }.flatten().setAccessible()
+        }?.setAccessible()
     }
 
-    fun methods(vararg paramTypes: Class<*>?): List<Method> {
-        val exists = mutableSetOf<String>()
-        return findRecursive {
-            it.declaredMethods.filter { method ->
-                // 仅保留继承链中最先匹配到的类的方法（优先子类）
-                // 忽略父类被覆盖的方法
-                paramTypes.contentEqualsWithoutNull(method.parameterTypes) && exists.add(method.signature())
+    fun method(matcher: MethodMatcher) = methodCache.getOrPut(matcher) {
+        findRecursive {
+            if (!matcher.isHidden || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                declaredMethods
+            } else {
+                HiddenApiBypass.getDeclaredMethods(type).filterIsInstance<Method>()
             }
-        }.flatten().setAccessible()
+        }.flatten().firstOrNull {
+            matcher.matches(it)
+        }?.setAccessible()
     }
 
-    val methods
+    inline fun method(matcher: MethodMatcher.() -> Unit): Method? {
+        contract {
+            callsInPlace(matcher, InvocationKind.EXACTLY_ONCE)
+        }
+        return method(MethodMatcher().apply(matcher))
+    }
+
+    inline val methods
         get() = type.methods.setAccessible()
 
-    val declaredMethods
+    inline val declaredMethods
         get() = type.declaredMethods.setAccessible()
 
     fun field(name: String) = fieldCache.getOrPut(name) {
         firstRecursive {
             runCatching {
-                it.getDeclaredField(name).setAccessible()
-            }.getOrNull()
-        }
+                it.getDeclaredField(name)
+            }.getOrElse { _ ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val fields = HiddenApiBypass.getStaticFields(it) + HiddenApiBypass.getInstanceFields(it)
+                    fields.firstOrNull { field -> field.name == name }
+                } else {
+                    null
+                }
+            }
+        }?.setAccessible()
     }
 
-    fun fields(type: Class<*>) = findRecursive {
-        it.declaredFields.filter { field ->
-            field.type == type
-        }
-    }.flatten().setAccessible()
+    fun field(type: Class<*>) = fieldCache.getOrPut(type) {
+        firstRecursive {
+            it.declaredFields.singleOrNull { field ->
+                field.type == type
+            }
+        }?.setAccessible()
+    }
 
-    val fields
+    fun field(matcher: FieldMatcher) = fieldCache.getOrPut(matcher) {
+        findRecursive {
+            if (!matcher.isHidden || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                declaredFields
+            } else {
+                HiddenApiBypass.getStaticFields(type) + HiddenApiBypass.getInstanceFields(type)
+            }
+        }.flatten().firstOrNull {
+            matcher.matches(it)
+        }?.setAccessible()
+    }
+
+    inline fun field(matcher: FieldMatcher.() -> Unit): Field? {
+        contract {
+            callsInPlace(matcher, InvocationKind.EXACTLY_ONCE)
+        }
+        return field(FieldMatcher().apply(matcher))
+    }
+
+    inline val fields
         get() = type.fields.setAccessible()
 
-    val declaredFields
+    inline val declaredFields
         get() = type.declaredFields.setAccessible()
 
     private fun getParametersString(vararg clazzes: Class<*>?): String {
         return "(${clazzes.joinToString(",") { it?.name ?: "null" }})"
-    }
-
-    private infix fun <T> Array<out T>.contentEqualsWithoutNull(other: Array<out T>): Boolean {
-        if (size != other.size) return false
-        return indices.all { i ->
-            this[i] == null || this[i] == other[i]
-        }
     }
 
     private inline fun <R> firstRecursive(func: (clazz: Class<*>) -> R?): R? {
@@ -248,6 +292,173 @@ class Reflect<T : Any>(val type: Class<T>) {
         do {
             func(superClass)?.let { result.add(it) }
         } while ((superClass.getSuperclass()?.also { superClass = it }) != null)
+        return result
+    }
+}
+
+sealed class MemberMatcher {
+    var name: String? = null
+
+    var modifiers: Int? = null
+
+    var annotations: Array<out Annotation>? = null
+
+    var isSynthetic: Boolean? = null
+
+    var isHidden: Boolean = false
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is MemberMatcher) return false
+
+        if (name != other.name) return false
+        if (modifiers != other.modifiers) return false
+        if (!annotations.contentEquals(other.annotations)) return false
+        if (isSynthetic != other.isSynthetic) return false
+        if (isHidden != other.isHidden) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = name?.hashCode() ?: 0
+        result = 31 * result + (modifiers ?: 0)
+        result = 31 * result + (annotations?.contentHashCode() ?: 0)
+        result = 31 * result + (isSynthetic?.hashCode() ?: 0)
+        return result
+    }
+}
+
+sealed class ExecutableMatcher : MemberMatcher() {
+    var paramTypes: Array<out Class<*>?>? = null
+
+    var paramCount: Int? = null
+
+    var exceptionTypes: Array<out Class<*>>? = null
+
+    var isVarArgs: Boolean? = null
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ExecutableMatcher) return false
+        if (!super.equals(other)) return false
+
+        if (!paramTypes.contentEquals(other.paramTypes)) return false
+        if (paramCount != other.paramCount) return false
+        if (!exceptionTypes.contentEquals(other.exceptionTypes)) return false
+        if (isVarArgs != other.isVarArgs) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = super.hashCode()
+        result = 31 * result + (paramTypes?.contentHashCode() ?: 0)
+        result = 31 * result + (paramCount ?: 0)
+        result = 31 * result + (exceptionTypes?.contentHashCode() ?: 0)
+        result = 31 * result + (isVarArgs?.hashCode() ?: 0)
+        return result
+    }
+}
+
+class ConstructorMatcher : ExecutableMatcher() {
+    fun matches(constructor: Constructor<*>): Boolean {
+        if (name != null && name != constructor.name) return false
+        if (modifiers != null && modifiers != constructor.modifiers) return false
+        if (annotations != null && !annotations!!.any { it in constructor.annotations }) return false
+        if (paramTypes != null && !paramTypes.contentEqualsWithoutNull(constructor.parameterTypes)) return false
+        if (paramCount != null && paramCount != constructor.parameterTypes.size) return false
+        if (exceptionTypes != null && !exceptionTypes!!.any { it in constructor.exceptionTypes }) return false
+        if (isSynthetic != null && isSynthetic != constructor.isSynthetic) return false
+        if (isVarArgs != null && isVarArgs != constructor.isVarArgs) return false
+        return true
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ConstructorMatcher) return false
+        if (!super.equals(other)) return false
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return super.hashCode() * 31
+    }
+}
+
+class MethodMatcher : ExecutableMatcher() {
+    var returnType: Class<*>? = null
+
+    var isBridge: Boolean? = null
+
+    var isDefault: Boolean? = null
+
+    fun matches(method: Method): Boolean {
+        if (name != null && name != method.name) return false
+        if (modifiers != null && modifiers != method.modifiers) return false
+        if (annotations != null && !annotations!!.any { it in method.annotations }) return false
+        if (paramTypes != null && !paramTypes.contentEqualsWithoutNull(method.parameterTypes)) return false
+        if (paramCount != null && paramCount != method.parameterTypes.size) return false
+        if (exceptionTypes != null && !exceptionTypes!!.any { it in method.exceptionTypes }) return false
+        if (returnType != null && returnType != method.returnType) return false
+        if (isSynthetic != null && isSynthetic != method.isSynthetic) return false
+        if (isVarArgs != null && isVarArgs != method.isVarArgs) return false
+        if (isBridge != null && isBridge != method.isBridge) return false
+        if (isDefault != null && isDefault != method.isDefault) return false
+        return true
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is MethodMatcher) return false
+        if (!super.equals(other)) return false
+
+        if (returnType != other.returnType) return false
+        if (isBridge != other.isBridge) return false
+        if (isDefault != other.isDefault) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = super.hashCode()
+        result = 31 * result + (returnType?.hashCode() ?: 0)
+        result = 31 * result + (isBridge?.hashCode() ?: 0)
+        result = 31 * result + (isDefault?.hashCode() ?: 0)
+        return result
+    }
+}
+
+class FieldMatcher : MemberMatcher() {
+    var type: Class<*>? = null
+
+    var isEnumConstant: Boolean? = null
+
+    fun matches(field: Field): Boolean {
+        if (name != null && name != field.name) return false
+        if (modifiers != null && modifiers != field.modifiers) return false
+        if (annotations != null && !annotations!!.any { it in field.annotations }) return false
+        if (type != null && type != field.type) return false
+        if (isSynthetic != null && isSynthetic != field.isSynthetic) return false
+        if (isEnumConstant != null && isEnumConstant != field.isEnumConstant) return false
+        return true
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is FieldMatcher) return false
+        if (!super.equals(other)) return false
+
+        if (type != other.type) return false
+        if (isEnumConstant != other.isEnumConstant) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = super.hashCode()
+        result = 31 * result + (type?.hashCode() ?: 0)
+        result = 31 * result + (isEnumConstant?.hashCode() ?: 0)
         return result
     }
 }
@@ -453,15 +664,22 @@ fun Field.put(obj: Any?, value: Any?) {
     }
 }
 
-fun <T : AccessibleObject> T.setAccessible(): T {
+@PublishedApi
+internal fun <T : AccessibleObject> T.setAccessible(): T {
     isAccessible = true
     return this
 }
 
-fun <T : AccessibleObject> Array<T>.setAccessible(): List<T> {
+@PublishedApi
+internal fun <T : AccessibleObject> Array<T>.setAccessible(): List<T> {
     return this.map { it.setAccessible() }
 }
 
-fun <T : AccessibleObject> Iterable<T>.setAccessible(): List<T> {
-    return this.map { it.setAccessible() }
+private infix fun <T> Array<out T>?.contentEqualsWithoutNull(other: Array<out T>?): Boolean {
+    if (this === other) return true
+    if (this == null || other == null) return false
+    if (size != other.size) return false
+    return indices.all { i ->
+        this[i] == null || this[i] == other[i]
+    }
 }
