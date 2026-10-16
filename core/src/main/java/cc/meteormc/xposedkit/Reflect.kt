@@ -356,27 +356,27 @@ fun <T> Field.get(obj: Any?): T {
 }
 
 fun Field.put(obj: Any?, value: Any?) {
+    this.setAccessible()
+    val isStatic = Modifier.isStatic(modifiers)
     val isVolatile = Modifier.isVolatile(modifiers)
-    val isImmutable = Modifier.isStatic(modifiers) && Modifier.isFinal(modifiers)
     // 从 Android 17 的第一个 Beta 开始 无法通过反射修改 static final 的字段
     // https://android-developers.googleblog.com/2026/02/the-first-beta-of-android-17.html
     if (
-        !isImmutable ||
+        !(isStatic && Modifier.isFinal(modifiers)) ||
         Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA ||
         (Build.VERSION.SDK_INT == Build.VERSION_CODES.BAKLAVA && Build.VERSION.PREVIEW_SDK_INT < 1)
     ) {
         try {
-            this.setAccessible()[obj] = value
+            this[obj] = value
             return
-        } catch (t: Throwable) {
-            // 跳过处理非 static final 字段的异常
-            if (!isImmutable) throw t
+        } catch (_: IllegalAccessException) {
+
         }
     }
 
     // 提前解析字段以便读取正确的偏移量
-    get(obj)
-    val base = declaringClass
+    runCatching { get(obj) }
+    val base = if (isStatic) declaringClass else obj
     val offset = Field::class.java.reflect.field("offset")!!.get<Long>(this)
     when (type) {
         Boolean::class.javaPrimitiveType -> {

@@ -3,7 +3,7 @@ package cc.meteormc.xposedkit.util
 import sun.misc.Unsafe
 
 internal object UnsafeMemory {
-    fun putInt8Volatile(unsafe: Unsafe, base: Any, offset: Long, value: UInt) {
+    fun putInt8Volatile(unsafe: Unsafe, base: Any?, offset: Long, value: UInt) {
         val alignedOffset = offset and -4L
         var oldValue: Int
         var newValue: Int
@@ -14,7 +14,7 @@ internal object UnsafeMemory {
         } while (!unsafe.compareAndSwapInt(base, alignedOffset, oldValue, newValue))
     }
 
-    fun putInt16Volatile(unsafe: Unsafe, base: Any, offset: Long, value: UInt) {
+    fun putInt16Volatile(unsafe: Unsafe, base: Any?, offset: Long, value: UInt) {
         val alignedOffset = offset and -4L
         var oldValue: Int
         var newValue: Int
