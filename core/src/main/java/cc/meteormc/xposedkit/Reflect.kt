@@ -6,6 +6,7 @@ package cc.meteormc.xposedkit
 import android.os.Build
 import cc.meteormc.xposedkit.nativelib.NativeBridge
 import cc.meteormc.xposedkit.util.Primitives
+import cc.meteormc.xposedkit.util.UnsafeMemory
 import sun.misc.Unsafe
 import java.lang.reflect.AccessibleObject
 import java.lang.reflect.Constructor
@@ -14,10 +15,6 @@ import java.lang.reflect.Member
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.WeakHashMap
-import kotlin.Byte
-import kotlin.Float
-import kotlin.Long
-import kotlin.Short
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.InvocationKind
 import kotlin.contracts.contract
@@ -387,7 +384,7 @@ fun Field.put(obj: Any?, value: Any?) {
             if (!isVolatile) {
                 theUnsafe.putBoolean(base, offset, value)
             } else {
-//                theUnsafe.putBooleanVolatile(base, offset, value)
+                UnsafeMemory.putInt8Volatile(theUnsafe, base, offset, if (value) 1u else 0u)
             }
         }
         Byte::class.javaPrimitiveType -> {
@@ -395,7 +392,7 @@ fun Field.put(obj: Any?, value: Any?) {
             if (!isVolatile) {
                 theUnsafe.putByte(base, offset, value)
             } else {
-//                theUnsafe.putByteVolatile(base, offset, value)
+                UnsafeMemory.putInt8Volatile(theUnsafe, base, offset, value.toUInt())
             }
         }
         Char::class.javaPrimitiveType -> {
@@ -403,7 +400,7 @@ fun Field.put(obj: Any?, value: Any?) {
             if (!isVolatile) {
                 theUnsafe.putChar(base, offset, value)
             } else {
-//                theUnsafe.putCharVolatile(base, offset, value)
+                UnsafeMemory.putInt16Volatile(theUnsafe, base, offset, value.code.toUInt())
             }
         }
         Short::class.javaPrimitiveType -> {
@@ -411,7 +408,7 @@ fun Field.put(obj: Any?, value: Any?) {
             if (!isVolatile) {
                 theUnsafe.putShort(base, offset, value)
             } else {
-//                theUnsafe.putShortVolatile(base, offset, value)
+                UnsafeMemory.putInt16Volatile(theUnsafe, base, offset, value.toUInt())
             }
         }
         Int::class.javaPrimitiveType -> {
