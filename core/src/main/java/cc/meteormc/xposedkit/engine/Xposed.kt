@@ -123,7 +123,7 @@ class Xposed : Engine, IXposedHookZygoteInit, IXposedHookLoadPackage {
         }
 
         return hook(
-            NativeBridge.FindClassInitializer(clazz),
+            NativeBridge.FindClassInitializer(clazz) ?: throw IllegalArgumentException("Cannot find class initializer for $clazz"),
             type,
             InvokeCallback.PRIORITY_NORMAL,
             callback
