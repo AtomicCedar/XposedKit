@@ -79,12 +79,10 @@ class Xposed : Engine, IXposedHookZygoteInit, IXposedHookLoadPackage {
         }
 
         return XposedBridge::class.reflect {
-            // 先尝试反射LSPosed框架额外提供的方法
-            method("deoptimizeMethod")?.run {
-                runCatching { invoke(null, member) }.isSuccess
-            }?.takeIf { it }
-        } ?: run {
-            NativeBridge.SetEntryPointsToInterpreter(member)
+            // 尝试反射LSPosed框架额外提供的方法
+            method("deoptimizeMethod")?.runCatching {
+                invoke(null, member)
+            }?.isSuccess ?: false
         }
     }
 
