@@ -122,6 +122,10 @@ class Xposed : Engine, IXposedHookZygoteInit, IXposedHookLoadPackage {
             override fun isSynthetic() = false
         }
 
+        if (!NativeBridge.isLoaded) {
+            throw IllegalStateException("NativeBridge is not available!")
+        }
+
         return hook(
             NativeBridge.FindClassInitializer(clazz) ?: throw IllegalArgumentException("Cannot find class initializer for $clazz"),
             type,

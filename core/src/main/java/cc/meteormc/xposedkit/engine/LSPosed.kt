@@ -274,7 +274,9 @@ class LSPosed : Engine, XposedModule() {
 
         // 在此处完成清理操作
         appPackages.clear()
-        NativeBridge.Cleanup()
+        if (NativeBridge.isLoaded) {
+            NativeBridge.Cleanup()
+        }
         return true
     }
 
