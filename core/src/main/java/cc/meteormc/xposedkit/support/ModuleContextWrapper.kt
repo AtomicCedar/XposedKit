@@ -22,6 +22,7 @@ import cc.meteormc.xposedkit.XLog
 import cc.meteormc.xposedkit.XposedKit
 import cc.meteormc.xposedkit.call
 import cc.meteormc.xposedkit.get
+import cc.meteormc.xposedkit.put
 import cc.meteormc.xposedkit.reflect
 
 @ExperimentalStdlibApi
@@ -290,8 +291,8 @@ open class ModuleContextWrapper(
 
                     activity.intent = this.getRealIntent(intent) ?: intent
                     ContextThemeWrapper::class.reflect {
-                        field("mBase")?.set(activity, moduleContext)
-                        field("mResources")?.set(activity, mResources)
+                        field("mBase")?.put(activity, moduleContext)
+                        field("mResources")?.put(activity, mResources)
                     }
 
                     if (moduleContext.mThemeId > 0) {
@@ -302,7 +303,7 @@ open class ModuleContextWrapper(
                             activity.theme = moduleContext.theme
                         } else {
                             ContextThemeWrapper::class.reflect {
-                                field("mTheme")?.set(activity, moduleContext.theme)
+                                field("mTheme")?.put(activity, moduleContext.theme)
                             }
                         }
                     } else {
@@ -380,14 +381,14 @@ open class ModuleContextWrapper(
 
             ActivityThread::class.reflect {
                 field("mInstrumentation")?.apply {
-                    set(activityThread, instrumentation)
+                    put(activityThread, instrumentation)
                     XLog.d(TAG, "startActivity: instrumentation replaced ${this[activityThread].javaClass}")
                 }
             }
         }
 
         XLog.d(TAG, "startActivity: calling execStartActivity with new intent ${newIntent.component}")
-        Instrumentation::class.reflect {
+        val result = Instrumentation::class.reflect {
             method(
                 "execStartActivity",
                 Context::class.java,
@@ -398,7 +399,7 @@ open class ModuleContextWrapper(
                 Int::class.javaPrimitiveType!!,
                 Bundle::class.java
             )!!
-        }.call<Unit>(
+        }.call<Instrumentation.ActivityResult?>(
             instrumentation,
             this,
             activityThread.applicationThread,
@@ -407,7 +408,8 @@ open class ModuleContextWrapper(
             newIntent,
             -1,
             options
-        )
+        ) ?: return
+        XLog.d(TAG, "startActivity: execStartActivity result code=${result.resultCode}, data=${result.resultData}")
     }
 
     override fun startActivities(intents: Array<Intent>) {
