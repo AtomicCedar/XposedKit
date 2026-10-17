@@ -121,7 +121,7 @@ class Reflect<T : Any>(val type: Class<T>) {
     }
 
     fun nestedClass(name: String) = nestedClassCache.getOrPut(name) {
-        firstRecursive {
+        findRecursive {
             it.declaredClasses.firstOrNull { clazz ->
                 clazz.name == "${type.name}$$name"
             }
@@ -188,7 +188,7 @@ class Reflect<T : Any>(val type: Class<T>) {
     }
 
     fun method(name: String, vararg paramTypes: Class<*>) = methodCache.getOrPut(name + getParametersString(*paramTypes)) {
-        firstRecursive {
+        findRecursive {
             runCatching {
                 it.getDeclaredMethod(name, *paramTypes)
             }.getOrElse { _ ->
@@ -207,9 +207,9 @@ class Reflect<T : Any>(val type: Class<T>) {
                 declaredMethods
             } else {
                 HiddenApiBypass.getDeclaredMethods(type).filterIsInstance<Method>()
+            }.firstOrNull {
+                matcher.matches(it)
             }
-        }.flatten().firstOrNull {
-            matcher.matches(it)
         }?.setAccessible()
     }
 
@@ -227,7 +227,7 @@ class Reflect<T : Any>(val type: Class<T>) {
         get() = type.declaredMethods.setAccessible()
 
     fun field(name: String) = fieldCache.getOrPut(name) {
-        firstRecursive {
+        findRecursive {
             runCatching {
                 it.getDeclaredField(name)
             }.getOrElse { _ ->
@@ -242,7 +242,7 @@ class Reflect<T : Any>(val type: Class<T>) {
     }
 
     fun field(type: Class<*>) = fieldCache.getOrPut(type) {
-        firstRecursive {
+        findRecursive {
             it.declaredFields.singleOrNull { field ->
                 field.type == type
             }
@@ -255,9 +255,9 @@ class Reflect<T : Any>(val type: Class<T>) {
                 declaredFields
             } else {
                 HiddenApiBypass.getStaticFields(type) + HiddenApiBypass.getInstanceFields(type)
+            }.firstOrNull {
+                matcher.matches(it)
             }
-        }.flatten().firstOrNull {
-            matcher.matches(it)
         }?.setAccessible()
     }
 
@@ -278,21 +278,12 @@ class Reflect<T : Any>(val type: Class<T>) {
         return "(${clazzes.joinToString(",") { it?.name ?: "null" }})"
     }
 
-    private inline fun <R> firstRecursive(func: (clazz: Class<*>) -> R?): R? {
+    private inline fun <R> findRecursive(func: (clazz: Class<*>) -> R?): R? {
         var superClass: Class<*> = type
         do {
             func(superClass)?.let { return it }
         } while ((superClass.getSuperclass()?.also { superClass = it }) != null)
         return null
-    }
-
-    private inline fun <R> findRecursive(func: (clazz: Class<*>) -> R?): List<R> {
-        val result = mutableListOf<R>()
-        var superClass: Class<*> = type
-        do {
-            func(superClass)?.let { result.add(it) }
-        } while ((superClass.getSuperclass()?.also { superClass = it }) != null)
-        return result
     }
 }
 
