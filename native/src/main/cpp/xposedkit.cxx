@@ -177,8 +177,8 @@ Java_cc_meteormc_xposedkit_nativelib_NativeBridge_FindClassInitializer(JNIEnv *e
 
     auto mirror = (xposedkit::art::mirror::Class*) self->DecodeGlobalJObject(global);
     if (!mirror) {
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode global reference");
         env->DeleteGlobalRef(global);
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode global reference");
         return nullptr;
     }
 
