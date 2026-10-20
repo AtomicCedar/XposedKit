@@ -194,7 +194,8 @@ Java_cc_meteormc_xposedkit_nativelib_NativeBridge_FindClassInitializer(JNIEnv *e
 extern "C"
 JNIEXPORT jobjectArray JNICALL
 Java_cc_meteormc_xposedkit_nativelib_NativeBridge_VisitHeapObjects(JNIEnv *env, jclass thiz,
-                                                                   jclass clazz) {
+                                                                   jclass clazz,
+                                                                   jboolean assignable) {
     if (!clazz) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "clazz is null");
         return nullptr;

@@ -26,5 +26,5 @@ public class NativeBridge {
 
     public static native Method FindClassInitializer(Class<?> clazz);
 
-    public static native <T> T[] VisitHeapObjects(Class<T> clazz);
+    public static native <T> T[] VisitHeapObjects(Class<T> clazz, boolean assignable);
 }

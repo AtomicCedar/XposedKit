@@ -508,12 +508,12 @@ fun <T : Any> Class<T>.allocate(): T {
     return NativeBridge.AllocObject<T>(this)
 }
 
-fun <T : Any> Class<T>.findInstances(): List<T> {
+fun <T : Any> Class<T>.findInstances(assignable: Boolean = true): List<T> {
     if (!NativeBridge.isLoaded) {
         return emptyList()
     }
 
-    return NativeBridge.VisitHeapObjects(this).toList()
+    return NativeBridge.VisitHeapObjects(this, assignable).toList()
 }
 
 fun Constructor<*>.deoptimize(): Boolean {
