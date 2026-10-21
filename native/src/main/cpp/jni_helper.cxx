@@ -14,7 +14,7 @@ namespace {
     jclass FindClass(JNIEnv* env, Names&&... names) {
         jclass result = nullptr;
 
-        auto try_find = [&](const char* name) {
+        auto try_find = [env, &result](const char* name) {
             if (result) return;
 
             result = env->FindClass(name);
@@ -27,9 +27,7 @@ namespace {
         (try_find(std::forward<Names>(names)), ...);
 
         if (!result) {
-            env->ThrowNew(
-                    env->FindClass("java/lang/ClassNotFoundException"),
-                    "None of the candidate classes were found");
+            env->ThrowNew(env->FindClass("java/lang/ClassNotFoundException"), "None of the candidate classes were found");
             return nullptr;
         }
 

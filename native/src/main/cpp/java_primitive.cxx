@@ -21,7 +21,7 @@ enum class PrimitiveType {
     Void,
 };
 
-PrimitiveType GetPrimitiveType(JNIEnv* env, jclass clazz) {
+auto GetPrimitiveType(JNIEnv* env, jclass clazz) {
     if (env->IsSameObject(clazz, Class_Boolean))
         return PrimitiveType::Boolean;
 
