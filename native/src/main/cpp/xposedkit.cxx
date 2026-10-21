@@ -2,8 +2,6 @@ module;
 
 #include "jni.h"
 
-#include <atomic>
-#include <string>
 #include <vector>
 
 export module xposedkit;
@@ -16,16 +14,18 @@ import :thread;
 import :java_primitive;
 import :jni_helper;
 
-static void JNICALL Init(JNIEnv *env, jclass thiz) {
+namespace xposedkit {
 
+static void JNICALL Init(JNIEnv* env, jclass) {
+    InstallJniHelper(env);
 }
 
-static void JNICALL Cleanup(JNIEnv *env, jclass thiz) {
-    xposedkit::UninstallJniHelper(env);
+static void JNICALL Cleanup(JNIEnv* env, jclass) {
+    UninstallJniHelper(env);
 }
 
-static jobject JNICALL AllocObject(JNIEnv *env, jclass thiz,
-                                                jclass clazz) {
+static jobject JNICALL AllocObject(JNIEnv* env, jclass,
+                                   jclass clazz) {
     if (!clazz) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "clazz is null");
         return nullptr;
@@ -34,10 +34,10 @@ static jobject JNICALL AllocObject(JNIEnv *env, jclass thiz,
     return env->AllocObject(clazz);
 }
 
-static jobject JNICALL CallNonvirtualMethod(JNIEnv *env, jclass thiz,
-                                                         jobject method,
-                                                         jobject instance,
-                                                         jobjectArray args) {
+static jobject JNICALL CallNonvirtualMethod(JNIEnv* env, jclass,
+                                            jobject method,
+                                            jobject instance,
+                                            jobjectArray args) {
     if (!method) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "method is null");
         return nullptr;
@@ -54,10 +54,10 @@ static jobject JNICALL CallNonvirtualMethod(JNIEnv *env, jclass thiz,
     }
 
     auto target = env->FromReflectedMethod(method);
-    auto clazz = (jclass) env->CallObjectMethod(method, xposedkit::Method_Executable_declaringClass);
-    auto paramTypes = (jobjectArray) env->CallObjectMethod(method, xposedkit::Method_Executable_paramTypes);
+    auto clazz = static_cast<jclass>(env->CallObjectMethod(method, Method_Executable_declaringClass));
+    auto paramTypes = static_cast<jobjectArray>(env->CallObjectMethod(method, Method_Executable_paramTypes));
 
-    jsize length = env->GetArrayLength(paramTypes);
+    auto length = env->GetArrayLength(paramTypes);
     if (length != env->GetArrayLength(args)) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "argument length mismatch");
         return nullptr;
@@ -66,56 +66,57 @@ static jobject JNICALL CallNonvirtualMethod(JNIEnv *env, jclass thiz,
     std::vector<jvalue> cargs(length);
     for (jsize i = 0; i < length; i++) {
         auto arg = env->GetObjectArrayElement(args, i);
-        auto paramType = (jclass) env->GetObjectArrayElement(paramTypes, i);
-        cargs[i] = xposedkit::ToPrimitiveType(env, paramType, arg);
+        auto paramType = static_cast<jclass>(env->GetObjectArrayElement(paramTypes, i));
+        cargs[i] = ToPrimitiveType(env, paramType, arg);
         env->DeleteLocalRef(paramType);
 
-        if (env->ExceptionCheck())
+        if (env->ExceptionCheck()) {
             return nullptr;
+        }
     }
 
     env->DeleteLocalRef(paramTypes);
 
-    if (env->IsInstanceOf(method, xposedkit::Class_Method)) {
+    if (env->IsInstanceOf(method, Class_Method)) {
         jvalue local{};
-        jvalue* result = &local;
-        auto returnType = xposedkit::GetPrimitiveType(
+        auto result = &local;
+        auto returnType = GetPrimitiveType(
                 env,
-                (jclass) env->CallObjectMethod(method, xposedkit::Method_Method_returnType));
+                static_cast<jclass>(env->CallObjectMethod(method, Method_Method_returnType)));
         switch (returnType) {
-            case xposedkit::PrimitiveType::Object:
+            case PrimitiveType::Object:
                 return env->CallNonvirtualObjectMethodA(instance, clazz, target, cargs.data());
-            case xposedkit::PrimitiveType::Boolean:
+            case PrimitiveType::Boolean:
                 local.z = env->CallNonvirtualBooleanMethodA(instance, clazz, target, cargs.data());
                 break;
-            case xposedkit::PrimitiveType::Byte:
+            case PrimitiveType::Byte:
                 local.b = env->CallNonvirtualByteMethodA(instance, clazz, target, cargs.data());
                 break;
-            case xposedkit::PrimitiveType::Char:
+            case PrimitiveType::Char:
                 local.c = env->CallNonvirtualCharMethodA(instance, clazz, target, cargs.data());
                 break;
-            case xposedkit::PrimitiveType::Short:
+            case PrimitiveType::Short:
                 local.s = env->CallNonvirtualShortMethodA(instance, clazz, target, cargs.data());
                 break;
-            case xposedkit::PrimitiveType::Int:
+            case PrimitiveType::Int:
                 local.i = env->CallNonvirtualIntMethodA(instance, clazz, target, cargs.data());
                 break;
-            case xposedkit::PrimitiveType::Long:
+            case PrimitiveType::Long:
                 local.j = env->CallNonvirtualLongMethodA(instance, clazz, target, cargs.data());
                 break;
-            case xposedkit::PrimitiveType::Float:
+            case PrimitiveType::Float:
                 local.f = env->CallNonvirtualFloatMethodA(instance, clazz, target, cargs.data());
                 break;
-            case xposedkit::PrimitiveType::Double:
+            case PrimitiveType::Double:
                 local.d = env->CallNonvirtualDoubleMethodA(instance, clazz, target, cargs.data());
                 break;
-            case xposedkit::PrimitiveType::Void:
+            case PrimitiveType::Void:
                 result = nullptr;
                 break;
         }
 
         if (result) {
-            return xposedkit::FromPrimitiveType(env, returnType, *result);
+            return FromPrimitiveType(env, returnType, *result);
         }
     }
 
@@ -123,25 +124,25 @@ static jobject JNICALL CallNonvirtualMethod(JNIEnv *env, jclass thiz,
     return nullptr;
 }
 
-static jobject JNICALL FindClassInitializer(JNIEnv *env, jclass thiz,
-                                                         jclass clazz) {
+static jobject JNICALL FindClassInitializer(JNIEnv* env, jclass,
+                                            jclass clazz) {
     if (!clazz) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "clazz is null");
         return nullptr;
     }
 
-    auto self = xposedkit::art::Thread::Current();
+    auto self = art::Thread::Current();
     if (!self) {
         env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to get current thread");
         return nullptr;
     }
 
-    jobject global = env->NewGlobalRef(clazz);
+    auto global = env->NewGlobalRef(clazz);
     if (!global) {
         return nullptr;
     }
 
-    auto mirror = (xposedkit::art::mirror::Class*) self->DecodeGlobalJObject(global);
+    auto mirror = static_cast<art::mirror::Class*>(self->DecodeGlobalJObject(global));
     if (!mirror) {
         env->DeleteGlobalRef(global);
         env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode global reference");
@@ -157,9 +158,9 @@ static jobject JNICALL FindClassInitializer(JNIEnv *env, jclass thiz,
     return env->ToReflectedMethod(clazz, reinterpret_cast<jmethodID>(clinit), true);
 }
 
-static jobjectArray JNICALL VisitHeapObjects(JNIEnv *env, jclass thiz,
-                                                          jclass clazz,
-                                                          jboolean assignable) {
+static jobjectArray JNICALL VisitHeapObjects(JNIEnv* env, jclass,
+                                             jclass clazz,
+                                             jboolean assignable) {
     if (!clazz) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "clazz is null");
         return nullptr;
@@ -170,9 +171,9 @@ static jobjectArray JNICALL VisitHeapObjects(JNIEnv *env, jclass thiz,
 
 extern "C"
 JNIEXPORT jint JNICALL
-JNI_OnLoad(JavaVM *vm, void *reserved) {
-    JNIEnv *env;
-    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+JNI_OnLoad(JavaVM* vm, void*) {
+    JNIEnv* env;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK || !env) {
         return JNI_ERR;
     }
 
@@ -184,22 +185,22 @@ JNI_OnLoad(JavaVM *vm, void *reserved) {
     static const JNINativeMethod methods[] = {
             {"Init",
              "()V",
-             reinterpret_cast<void *>(Init)},
+             reinterpret_cast<void*>(Init)},
             {"Cleanup",
              "()V",
-             reinterpret_cast<void *>(Cleanup)},
+             reinterpret_cast<void*>(Cleanup)},
             {"AllocObject",
              "(Ljava/lang/Class;)Ljava/lang/Object;",
-             reinterpret_cast<void *>(AllocObject)},
+             reinterpret_cast<void*>(AllocObject)},
             {"CallNonvirtualMethod",
              "(Ljava/lang/reflect/Executable;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;",
-             reinterpret_cast<void *>(CallNonvirtualMethod)},
+             reinterpret_cast<void*>(CallNonvirtualMethod)},
             {"FindClassInitializer",
              "(Ljava/lang/Class;)Ljava/lang/reflect/Method;",
-             reinterpret_cast<void *>(FindClassInitializer)},
+             reinterpret_cast<void*>(FindClassInitializer)},
             {"VisitHeapObjects",
              "(Ljava/lang/Class;Z)[Ljava/lang/Object;",
-             reinterpret_cast<void *>(VisitHeapObjects)},
+             reinterpret_cast<void*>(VisitHeapObjects)},
     };
 
     auto result = env->RegisterNatives(bridge, methods, std::size(methods));
@@ -208,18 +209,18 @@ JNI_OnLoad(JavaVM *vm, void *reserved) {
         return JNI_ERR;
     }
 
-    xposedkit::InstallJniHelper(env);
-
     return JNI_VERSION_1_6;
 }
 
 extern "C"
 JNIEXPORT void JNICALL
-JNI_OnUnload(JavaVM *vm, void *reserved) {
-    JNIEnv *env;
-    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+JNI_OnUnload(JavaVM* vm, void*) {
+    JNIEnv* env;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK || !env) {
         return;
     }
 
-    xposedkit::UninstallJniHelper(env);
+    Cleanup(env, nullptr);
+}
+
 }
