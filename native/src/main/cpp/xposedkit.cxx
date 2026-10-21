@@ -166,6 +166,11 @@ static jobjectArray JNICALL VisitHeapObjects(JNIEnv* env, jclass,
         return nullptr;
     }
 
+    if (GetPrimitiveType(env, clazz) != PrimitiveType::Object) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "clazz is a primitive type");
+        return nullptr;
+    }
+
     return nullptr;
 }
 
