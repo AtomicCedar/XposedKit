@@ -13,6 +13,7 @@ import :thread;
 
 import :java_primitive;
 import :jni_helper;
+import :sdk_version;
 
 namespace xposedkit {
 
@@ -171,7 +172,128 @@ static jobjectArray JNICALL VisitHeapObjects(JNIEnv* env, jclass,
         return nullptr;
     }
 
-    return nullptr;
+    auto runtime = art::Runtime::Current();
+    auto heap = runtime ? runtime->GetHeap() : nullptr;
+    if (!heap) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to get current heap");
+        return nullptr;
+    }
+
+    auto sdkVersion = GetAndroidSdkVersion();
+    auto toJArray = [env, clazz](auto& array, auto release) -> jobjectArray {
+        auto maxSize = static_cast<size_t>(std::numeric_limits<jsize>::max());
+        if (array.size() > maxSize) {
+            for (auto i = maxSize; i < array.size(); ++i) {
+                release(array[i]);
+            }
+            array.resize(maxSize);
+        }
+
+        const auto size = static_cast<jsize>(array.size());
+        auto result = env->NewObjectArray(size, clazz, nullptr);
+        if (env->ExceptionCheck() || !result) {
+            for (const auto& value : array) {
+                release(value);
+            }
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to create result array");
+            return nullptr;
+        }
+
+        for (jsize i = 0; i < size; ++i) {
+            auto value = array[static_cast<size_t>(i)];
+            env->SetObjectArrayElement(result, i, value);
+            release(value);
+            if (env->ExceptionCheck()) {
+                env->DeleteLocalRef(result);
+                return nullptr;
+            }
+        }
+
+        return result;
+    };
+    if (sdkVersion <= kSdkOMr1) {
+        struct InstanceCollector {
+            JNIEnv* env;
+            jclass clazz;
+            bool assignable;
+            std::vector<jobject> instances;
+
+            static void Callback(art::mirror::Object* object, void* arg) {
+                auto collector = reinterpret_cast<InstanceCollector*>(arg);
+
+                auto env = collector->env;
+                auto ref = JavaVMExt::NewLocalRef(env, object);
+                if (!ref) return;
+
+                auto matches = false;
+                auto expected = collector->clazz;
+                if (collector->assignable) {
+                    matches = env->IsInstanceOf(ref, expected);
+                } else {
+                    auto actual = env->GetObjectClass(ref);
+                    if (actual) {
+                        matches = env->IsSameObject(actual, expected);
+                        env->DeleteLocalRef(actual);
+                    }
+                }
+
+                if (!matches || env->ExceptionCheck()) {
+                    env->DeleteLocalRef(ref);
+                    return;
+                }
+
+                try {
+                    collector->instances.push_back(ref);
+                } catch (...) {
+                    env->DeleteLocalRef(ref);
+                }
+            }
+        };
+
+        InstanceCollector collector{env, clazz, assignable == JNI_TRUE};
+        heap->VisitObjects(&InstanceCollector::Callback, &collector);
+
+        std::vector<jobject> instances;
+        instances.swap(collector.instances);
+        return toJArray(instances, [env](auto obj) {
+            env->DeleteLocalRef(obj);
+        });
+    } else if (sdkVersion <= kSdkR) {
+        auto self = art::Thread::Current();
+        if (!self) {
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to get current thread");
+            return nullptr;
+        }
+
+        auto global = env->NewGlobalRef(clazz);
+        if (!global) {
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to create global reference");
+            return nullptr;
+        }
+
+        auto mirror = static_cast<art::mirror::Class*>(self->DecodeGlobalJObject(global));
+        if (!mirror) {
+            env->DeleteGlobalRef(global);
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode global object");
+            return nullptr;
+        }
+
+        art::VariableSizedHandleScope scope;
+        if (!scope.Initialize(self, env)) {
+            env->DeleteGlobalRef(global);
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to initialize handle scope");
+            return nullptr;
+        }
+
+        std::vector<art::Handle<art::mirror::Object>> handles;
+        auto handle = scope.NewHandle<art::mirror::Class>(mirror);
+        heap->GetInstances(scope, handle, assignable, 0, handles);
+        return toJArray(handles, [](const auto&) {
+
+        });
+    } else {
+        return nullptr;
+    }
 }
 
 extern "C"

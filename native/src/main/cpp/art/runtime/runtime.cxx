@@ -2,6 +2,7 @@ module;
 
 export module xposedkit:runtime;
 
+import :heap;
 import :symbol_resolver;
 
 namespace xposedkit::art {
@@ -18,6 +19,10 @@ namespace xposedkit::art {
             }
 
             return *Current_;
+        }
+
+        gc::Heap* GetHeap() {
+            return nullptr;
         }
 
     };
