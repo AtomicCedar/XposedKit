@@ -16,46 +16,16 @@ import :thread;
 import :java_primitive;
 import :jni_helper;
 
-extern "C"
-JNIEXPORT jint JNICALL
-JNI_OnLoad(JavaVM *vm, void *reserved) {
-    JNIEnv* env;
-    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
-        return JNI_ERR;
-    }
+static void JNICALL Init(JNIEnv *env, jclass thiz) {
 
-    xposedkit::InstallJniHelper(env);
-
-    return JNI_VERSION_1_6;
 }
 
-extern "C"
-JNIEXPORT void JNICALL
-JNI_OnUnload(JavaVM *vm, void *reserved) {
-    JNIEnv* env;
-    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
-        return;
-    }
-
+static void JNICALL Cleanup(JNIEnv *env, jclass thiz) {
     xposedkit::UninstallJniHelper(env);
 }
 
-extern "C"
-JNIEXPORT void JNICALL
-Java_cc_meteormc_xposedkit_nativelib_NativeBridge_Init(JNIEnv *env, jclass clazz) {
-
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_cc_meteormc_xposedkit_nativelib_NativeBridge_Cleanup(JNIEnv *env, jclass clazz) {
-    xposedkit::UninstallJniHelper(env);
-}
-
-extern "C"
-JNIEXPORT jobject JNICALL
-Java_cc_meteormc_xposedkit_nativelib_NativeBridge_AllocObject(JNIEnv *env, jclass thiz,
-                                                              jclass clazz) {
+static jobject JNICALL AllocObject(JNIEnv *env, jclass thiz,
+                                                jclass clazz) {
     if (!clazz) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "clazz is null");
         return nullptr;
@@ -64,12 +34,10 @@ Java_cc_meteormc_xposedkit_nativelib_NativeBridge_AllocObject(JNIEnv *env, jclas
     return env->AllocObject(clazz);
 }
 
-extern "C"
-JNIEXPORT jobject JNICALL
-Java_cc_meteormc_xposedkit_nativelib_NativeBridge_CallNonvirtualMethod(JNIEnv *env, jclass thiz,
-                                                                       jobject method,
-                                                                       jobject instance,
-                                                                       jobjectArray args) {
+static jobject JNICALL CallNonvirtualMethod(JNIEnv *env, jclass thiz,
+                                                         jobject method,
+                                                         jobject instance,
+                                                         jobjectArray args) {
     if (!method) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "method is null");
         return nullptr;
@@ -155,10 +123,8 @@ Java_cc_meteormc_xposedkit_nativelib_NativeBridge_CallNonvirtualMethod(JNIEnv *e
     return nullptr;
 }
 
-extern "C"
-JNIEXPORT jobject JNICALL
-Java_cc_meteormc_xposedkit_nativelib_NativeBridge_FindClassInitializer(JNIEnv *env, jclass thiz,
-                                                                       jclass clazz) {
+static jobject JNICALL FindClassInitializer(JNIEnv *env, jclass thiz,
+                                                         jclass clazz) {
     if (!clazz) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "clazz is null");
         return nullptr;
@@ -191,15 +157,69 @@ Java_cc_meteormc_xposedkit_nativelib_NativeBridge_FindClassInitializer(JNIEnv *e
     return env->ToReflectedMethod(clazz, reinterpret_cast<jmethodID>(clinit), true);
 }
 
-extern "C"
-JNIEXPORT jobjectArray JNICALL
-Java_cc_meteormc_xposedkit_nativelib_NativeBridge_VisitHeapObjects(JNIEnv *env, jclass thiz,
-                                                                   jclass clazz,
-                                                                   jboolean assignable) {
+static jobjectArray JNICALL VisitHeapObjects(JNIEnv *env, jclass thiz,
+                                                          jclass clazz,
+                                                          jboolean assignable) {
     if (!clazz) {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "clazz is null");
         return nullptr;
     }
 
     return nullptr;
+}
+
+extern "C"
+JNIEXPORT jint JNICALL
+JNI_OnLoad(JavaVM *vm, void *reserved) {
+    JNIEnv *env;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        return JNI_ERR;
+    }
+
+    auto bridge = env->FindClass("cc/meteormc/xposedkit/nativelib/NativeBridge");
+    if (!bridge) {
+        return JNI_ERR;
+    }
+
+    static const JNINativeMethod methods[] = {
+            {"Init",
+             "()V",
+             reinterpret_cast<void *>(Init)},
+            {"Cleanup",
+             "()V",
+             reinterpret_cast<void *>(Cleanup)},
+            {"AllocObject",
+             "(Ljava/lang/Class;)Ljava/lang/Object;",
+             reinterpret_cast<void *>(AllocObject)},
+            {"CallNonvirtualMethod",
+             "(Ljava/lang/reflect/Executable;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;",
+             reinterpret_cast<void *>(CallNonvirtualMethod)},
+            {"FindClassInitializer",
+             "(Ljava/lang/Class;)Ljava/lang/reflect/Method;",
+             reinterpret_cast<void *>(FindClassInitializer)},
+            {"VisitHeapObjects",
+             "(Ljava/lang/Class;Z)[Ljava/lang/Object;",
+             reinterpret_cast<void *>(VisitHeapObjects)},
+    };
+
+    auto result = env->RegisterNatives(bridge, methods, std::size(methods));
+    env->DeleteLocalRef(bridge);
+    if (result != JNI_OK) {
+        return JNI_ERR;
+    }
+
+    xposedkit::InstallJniHelper(env);
+
+    return JNI_VERSION_1_6;
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+JNI_OnUnload(JavaVM *vm, void *reserved) {
+    JNIEnv *env;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        return;
+    }
+
+    xposedkit::UninstallJniHelper(env);
 }
