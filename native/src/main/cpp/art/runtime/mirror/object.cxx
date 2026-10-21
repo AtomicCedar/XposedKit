@@ -1,7 +1,5 @@
 module;
 
-#include "jni.h"
-
 export module xposedkit:object;
 
 import :art_method;

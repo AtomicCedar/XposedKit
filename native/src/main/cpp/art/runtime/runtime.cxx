@@ -1,7 +1,5 @@
 module;
 
-#include <string>
-
 export module xposedkit:runtime;
 
 import :symbol_resolver;

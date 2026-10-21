@@ -11,8 +11,8 @@ module;
 export module xposedkit:clazz;
 
 import :art_method;
-import :symbol_resolver;
 import :object;
+import :symbol_resolver;
 
 namespace xposedkit::art::mirror {
 
