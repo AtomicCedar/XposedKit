@@ -12,8 +12,8 @@ android {
 }
 
 dependencies {
-    compileOnly(project(":hidden-api"))
-    implementation(project(":native"))
+    compileOnly(projects.hiddenApi)
+    implementation(projects.native)
 
     compileOnly(libs.annotation)
     api(libs.hidden.api.bypass)
