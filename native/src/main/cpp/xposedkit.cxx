@@ -9,6 +9,7 @@ export module xposedkit;
 import :clazz;
 import :object;
 import :runtime;
+import :scoped_thread_state_change;
 import :thread;
 
 import :java_primitive;
@@ -137,6 +138,7 @@ static jobject JNICALL FindClassInitializer(JNIEnv* env, jclass,
         return nullptr;
     }
 
+    art::ScopedObjectAccess soa(self);
     auto mirror = static_cast<art::mirror::Class*>(self->DecodeJObject(env, clazz));
     if (!mirror) {
         env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode object");
