@@ -9,6 +9,7 @@ export module xposedkit;
 import :clazz;
 import :object;
 import :runtime;
+import :scoped_thread_state_change;
 import :thread;
 
 import :java_primitive;
@@ -179,6 +180,13 @@ static jobjectArray JNICALL VisitHeapObjects(JNIEnv* env, jclass,
         return nullptr;
     }
 
+    auto self = art::Thread::Current();
+    if (!self) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to get current thread");
+        return nullptr;
+    }
+
+    art::ScopedObjectAccess soa(self);
     auto sdkVersion = GetAndroidSdkVersion();
     auto toJArray = [env, clazz](auto& array, auto release) -> jobjectArray {
         auto maxSize = static_cast<size_t>(std::numeric_limits<jsize>::max());
@@ -259,12 +267,6 @@ static jobjectArray JNICALL VisitHeapObjects(JNIEnv* env, jclass,
             env->DeleteLocalRef(obj);
         });
     } else if (sdkVersion <= kSdkR) {
-        auto self = art::Thread::Current();
-        if (!self) {
-            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to get current thread");
-            return nullptr;
-        }
-
         auto global = env->NewGlobalRef(clazz);
         if (!global) {
             env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to create global reference");
