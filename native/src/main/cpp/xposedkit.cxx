@@ -201,7 +201,7 @@ JNI_OnLoad(JavaVM* vm, void*) {
              "(Ljava/lang/reflect/Executable;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;",
              reinterpret_cast<void*>(CallNonvirtualMethod)},
             {"FindClassInitializer",
-             "(Ljava/lang/Class;)Ljava/lang/reflect/Method;",
+             "(Ljava/lang/Class;)Ljava/lang/reflect/Member;",
              reinterpret_cast<void*>(FindClassInitializer)},
             {"VisitHeapObjects",
              "(Ljava/lang/Class;Z)[Ljava/lang/Object;",
