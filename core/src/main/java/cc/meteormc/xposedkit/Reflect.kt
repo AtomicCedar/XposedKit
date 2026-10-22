@@ -513,7 +513,7 @@ fun <T : Any> Class<T>.findInstances(assignable: Boolean = true): List<T> {
         return emptyList()
     }
 
-    return NativeBridge.VisitHeapObjects(this, assignable).toList()
+    return NativeBridge.VisitHeapObjects(this, assignable)?.toList().orEmpty()
 }
 
 fun Constructor<*>.deoptimize(): Boolean {

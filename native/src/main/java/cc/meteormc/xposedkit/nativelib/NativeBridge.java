@@ -1,5 +1,8 @@
 package cc.meteormc.xposedkit.nativelib;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 
@@ -20,11 +23,15 @@ public class NativeBridge {
 
     public static native void Cleanup();
 
-    public static native <T> T AllocObject(Class<T> clazz);
+    @NonNull
+    public static native <T> T AllocObject(@NonNull Class<T> clazz);
 
-    public static native Object CallNonvirtualMethod(Executable method, Object instance, Object... args);
+    @Nullable
+    public static native Object CallNonvirtualMethod(@NonNull Executable method, @NonNull Object instance, @NonNull Object... args);
 
-    public static native Method FindClassInitializer(Class<?> clazz);
+    @Nullable
+    public static native Method FindClassInitializer(@NonNull Class<?> clazz) throws IllegalStateException;
 
-    public static native <T> T[] VisitHeapObjects(Class<T> clazz, boolean assignable);
+    @Nullable
+    public static native <T> T[] VisitHeapObjects(@NonNull Class<T> clazz, boolean assignable) throws IllegalArgumentException;
 }

@@ -22,6 +22,10 @@ android {
     }
 }
 
+dependencies {
+    compileOnly(libs.annotation)
+}
+
 tasks.named<Delete>("clean") {
     val projectDirectory = layout.projectDirectory
     delete(
