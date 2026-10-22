@@ -137,20 +137,13 @@ static jobject JNICALL FindClassInitializer(JNIEnv* env, jclass,
         return nullptr;
     }
 
-    auto global = env->NewGlobalRef(clazz);
-    if (!global) {
-        return nullptr;
-    }
-
-    auto mirror = static_cast<art::mirror::Class*>(self->DecodeGlobalJObject(global));
+    auto mirror = static_cast<art::mirror::Class*>(self->DecodeJObject(env, clazz));
     if (!mirror) {
-        env->DeleteGlobalRef(global);
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode global reference");
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode object");
         return nullptr;
     }
 
     auto clinit = mirror->FindClassInitializer();
-    env->DeleteGlobalRef(global);
     if (!clinit) {
         return nullptr;
     }
