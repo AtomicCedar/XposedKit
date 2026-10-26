@@ -285,6 +285,21 @@ class Reflect<T : Any>(val type: Class<T>) {
         } while ((superClass.getSuperclass()?.also { superClass = it }) != null)
         return null
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Reflect<*>) return false
+        if (type != other.type) return false
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return type.hashCode()
+    }
+
+    override fun toString(): String {
+        return "Reflect{${type.name}}"
+    }
 }
 
 sealed class MemberMatcher {
