@@ -38,6 +38,8 @@ open class ModuleContextWrapper(
     companion object {
         private const val TAG = "ModuleContextWrapper"
 
+        private const val MAX_LOADER_NAME = 20
+
         val ContextWrapper.hostContext: Context?
             get() {
                 if (this is ModuleContextWrapper) {
@@ -201,6 +203,7 @@ open class ModuleContextWrapper(
                 it.exported && it.taskAffinity == null
             } ?: pendingActivities.first()
             mProxyActivity = ComponentName(info.packageName, info.name)
+            XLog.d(TAG, "startActivity: proxy activity is ${mProxyActivity?.className}, real activity is ${intent.component?.className}")
         }
 
         val newIntent = Intent()
@@ -209,7 +212,6 @@ open class ModuleContextWrapper(
         newIntent.putExtra("intent_wrapper", intent)
         newIntent.putExtra("target_activity_info", targetActivityInfo)
         newIntent.setComponent(mProxyActivity)
-        XLog.d(TAG, "startActivity: proxy activity is ${mProxyActivity}, real activity is ${intent.component}")
 
         val activityThread = mThread!!
         var instrumentation = activityThread.instrumentation
@@ -295,8 +297,14 @@ open class ModuleContextWrapper(
                         field("mResources")?.put(activity, mResources)
                     }
 
-                    if (moduleContext.mThemeId > 0) {
-                        // 继承创建ModuleContextWrapper时设置的主题
+                    // 配置Activity的主题 如果没有可用主题则使用默认主题 (一般取决于宿主)
+                    val targetActivityInfo = this.getTargetActivityInfo(intent)
+                    val themeId = targetActivityInfo?.theme ?: 0
+                    // 优先使用模块自定义的主题
+                    if (themeId != 0) {
+                        activity.setTheme(themeId)
+                    } else if (moduleContext.mThemeId > 0) {
+                        // 其次跟随ModuleContextWrapper设置的主题
                         val themeId = moduleContext.mThemeId
                         activity.setTheme(themeId)
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -306,26 +314,19 @@ open class ModuleContextWrapper(
                                 field("mTheme")?.put(activity, moduleContext.theme)
                             }
                         }
-                    } else {
-                        val targetActivityInfo = this.getTargetActivityInfo(intent)
-                        val themeId = targetActivityInfo?.theme ?: 0
-                        // 跟随模块的目标Activity设置的主题 否则就使用宿主的主题
-                        if (themeId != 0) {
-                            activity.setTheme(themeId)
-                        }
                     }
                 }
 
                 private fun tryNewModuleActivity(intent: Intent?): Activity? {
-                    XLog.d(TAG, "tryNewModuleActivity: current component is ${intent?.component}")
                     if (intent == null) return null
                     if (!this.isProxyActivity(intent)) return null
+                    XLog.d(TAG, "tryNewModuleActivity: current component is ${intent.component}")
 
                     val realContext = this@ModuleContextWrapper
                     val realClassLoader = realContext.classLoader
                     val realIntent = this.getRealIntent(intent) ?: return null
                     val realComponent = realIntent.component ?: return null
-                    XLog.d(TAG, "tryNewModuleActivity: real component is ${realComponent.className}")
+                    XLog.d(TAG, "tryNewModuleActivity: real component is $realComponent")
 
                     var exception: Throwable? = null
                     val className = runCatching {
@@ -342,26 +343,29 @@ open class ModuleContextWrapper(
                     }
 
                     return try {
-                        XLog.d(TAG, "tryNewModuleActivity: trying use ${realClassLoader.javaClass} to create $className activity")
+                        var loaderName = realClassLoader.toString()
+                        if (loaderName.length > MAX_LOADER_NAME) {
+                            loaderName = loaderName.take(MAX_LOADER_NAME) + "..."
+                        }
+
+                        XLog.d(TAG, "tryNewModuleActivity: trying use classloader '$loaderName' to load activity '$className'")
                         super.newActivity(
                             realClassLoader,
                             className,
                             realIntent
                         )
                     } catch (e: ClassNotFoundException) {
-                        XLog.w(TAG, "Failed to find Activity '$className' from module '${realContext.packageName}'", e)
                         if (exception != null) {
-                            exception.addSuppressed(e)
-                            XLog.e(
-                                TAG,
-                                "Failed to find Activity '$className'" +
-                                        " from module '${realContext.packageName}'" +
-                                        " in package '${baseContext.packageName}'," +
-                                        " and the subsequent operation also failed",
-                                exception
-                            )
+                            e.addSuppressed(exception)
                         }
 
+                        XLog.e(
+                            TAG,
+                            "Failed to find Activity '$className'" +
+                                    " from module '${realContext.packageName}'" +
+                                    " in package '${baseContext.packageName}'",
+                            exception
+                        )
                         null
                     }
                 }
@@ -387,7 +391,7 @@ open class ModuleContextWrapper(
             }
         }
 
-        XLog.d(TAG, "startActivity: calling execStartActivity with new intent ${newIntent.component}")
+        XLog.d(TAG, "startActivity: calling execStartActivity with component ${newIntent.component}")
         val result = Instrumentation::class.reflect {
             method(
                 "execStartActivity",
