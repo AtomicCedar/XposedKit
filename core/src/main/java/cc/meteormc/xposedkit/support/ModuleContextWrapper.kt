@@ -328,20 +328,8 @@ open class ModuleContextWrapper(
                     val realComponent = realIntent.component ?: return null
                     XLog.d(TAG, "tryNewModuleActivity: real component is $realComponent")
 
-                    var exception: Throwable? = null
-                    val className = runCatching {
-                        realContext.packageManager.getActivityInfo(
-                            realComponent,
-                            PackageManager.GET_META_DATA
-                        )
-                    }.onFailure {
-                        exception = it
-                    }.map {
-                        it.targetActivity ?: it.name
-                    }.getOrElse {
-                        realComponent.className
-                    }
-
+                    val activityInfo = this.getTargetActivityInfo(intent)
+                    val className = activityInfo?.targetActivity ?: activityInfo?.name ?: realComponent.className
                     return try {
                         var loaderName = realClassLoader.toString()
                         if (loaderName.length > MAX_LOADER_NAME) {
@@ -355,16 +343,12 @@ open class ModuleContextWrapper(
                             realIntent
                         )
                     } catch (e: ClassNotFoundException) {
-                        if (exception != null) {
-                            e.addSuppressed(exception)
-                        }
-
                         XLog.e(
                             TAG,
                             "Failed to find Activity '$className'" +
                                     " from module '${realContext.packageName}'" +
                                     " in package '${baseContext.packageName}'",
-                            exception
+                            e
                         )
                         null
                     }
