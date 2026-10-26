@@ -265,7 +265,7 @@ open class ModuleContextWrapper(
                 override fun onException(obj: Any?, e: Throwable?): Boolean {
                     if (obj !is Activity) return super.onException(obj, e)
 
-                    val intent = obj.intent
+                    val intent = obj.intent.copy()
                     val component = intent.component ?: return false
                     if (!this.isProxyActivity(intent) && component.packageName != this@ModuleContextWrapper.packageName) {
                         return super.onException(obj, e)
@@ -284,14 +284,16 @@ open class ModuleContextWrapper(
                 private fun prepareActivity(activity: Activity?, icicle: Bundle?) {
                     if (activity == null) return
 
-                    val intent = activity.intent
+                    val intent = activity.intent.copy()
                     if (!this.isProxyActivity(intent)) return
                     XLog.d(TAG, "prepareActivity: preparing activity ${activity.javaClass.name} for module context")
 
                     val moduleContext = this@ModuleContextWrapper
                     icicle?.classLoader = moduleContext.classLoader
 
-                    activity.intent = this.getRealIntent(intent) ?: intent
+                    activity.intent = this.getRealIntent(intent)?.apply {
+                        setExtrasClassLoader(moduleContext.classLoader)
+                    } ?: intent
                     ContextThemeWrapper::class.reflect {
                         field("mBase")?.put(activity, moduleContext)
                         field("mResources")?.put(activity, mResources)
@@ -319,6 +321,8 @@ open class ModuleContextWrapper(
 
                 private fun tryNewModuleActivity(intent: Intent?): Activity? {
                     if (intent == null) return null
+
+                    val intent = intent.copy()
                     if (!this.isProxyActivity(intent)) return null
                     XLog.d(TAG, "tryNewModuleActivity: current component is ${intent.component}")
 
@@ -353,6 +357,11 @@ open class ModuleContextWrapper(
                         null
                     }
                 }
+
+                // 由于读取操作会导致提前解析
+                // 此处拷贝以避免修改原始Intent
+                // 否则会出现ClassLoader冲突
+                private fun Intent.copy() = Intent(this)
 
                 private fun isProxyActivity(intent: Intent): Boolean {
                     return intent.getBooleanExtra("is_proxy_activity", false)
