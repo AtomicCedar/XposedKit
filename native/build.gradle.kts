@@ -5,11 +5,26 @@ plugins {
 
 android {
     namespace = "cc.meteormc.xposedkit.nativelib"
+    ndkVersion = com.android.SdkConstants.NDK_DEFAULT_VERSION
 
     defaultConfig {
         externalNativeBuild {
             cmake {
                 cppFlags("")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            externalNativeBuild {
+                cmake {
+                    arguments(
+                        "-DCMAKE_BUILD_TYPE=Release",
+                        "-DCMAKE_C_FLAGS_RELEASE=-Os",
+                        "-DCMAKE_CXX_FLAGS_RELEASE=-Os"
+                    )
+                }
             }
         }
     }
