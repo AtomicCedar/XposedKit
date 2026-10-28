@@ -8,7 +8,8 @@ val projectGroup = "cc.meteormc"
 val projectVersion = "1.0.0"
 
 val minSdkVersion = 24
-val targetSdkVersion = 37
+val sdkVersion = 37
+val minorSdkVersion = 1
 
 subprojects {
     group = projectGroup
@@ -17,7 +18,11 @@ subprojects {
     plugins.withType<com.android.build.gradle.LibraryPlugin> {
         extensions.configure<com.android.build.api.dsl.LibraryExtension> {
             compileSdk {
-                version = release(targetSdkVersion)
+                version = release(sdkVersion) {
+                    if (minorSdkVersion > 0) {
+                        minorApiLevel = minorSdkVersion
+                    }
+                }
             }
 
             defaultConfig {
