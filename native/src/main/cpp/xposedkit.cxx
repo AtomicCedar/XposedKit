@@ -214,9 +214,9 @@ static jlong JNICALL CreateXmlParseState(JNIEnv* env, jclass,
         Entry entry;
         auto ns_key = key("namespace");
         auto name_key = key("name");
-        auto name_res_key = key("nameResId");
-        auto raw_key = key("rawValue");
-        auto resource_key = key("resourceValue");
+        auto raw_key = key("value");
+        auto name_res_key = key("attributeId");
+        auto resource_key = key("valueResource");
         auto value_type_key = key("valueType");
         entry.has_ns = !env->CallBooleanMethod(item, is_null, ns_key);
         if (entry.has_ns) {
