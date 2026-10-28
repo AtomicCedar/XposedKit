@@ -327,10 +327,10 @@ sealed class MemberMatcher {
     }
 
     override fun hashCode(): Int {
-        var result = name?.hashCode() ?: 0
+        var result = name.hashCode()
         result = 31 * result + (modifiers ?: 0)
         result = 31 * result + (annotations?.contentHashCode() ?: 0)
-        result = 31 * result + (isSynthetic?.hashCode() ?: 0)
+        result = 31 * result + isSynthetic.hashCode()
         return result
     }
 }
@@ -362,7 +362,7 @@ sealed class ExecutableMatcher : MemberMatcher() {
         result = 31 * result + (paramTypes?.contentHashCode() ?: 0)
         result = 31 * result + (paramCount ?: 0)
         result = 31 * result + (exceptionTypes?.contentHashCode() ?: 0)
-        result = 31 * result + (isVarArgs?.hashCode() ?: 0)
+        result = 31 * result + isVarArgs.hashCode()
         return result
     }
 }
@@ -428,9 +428,9 @@ class MethodMatcher : ExecutableMatcher() {
 
     override fun hashCode(): Int {
         var result = super.hashCode()
-        result = 31 * result + (returnType?.hashCode() ?: 0)
-        result = 31 * result + (isBridge?.hashCode() ?: 0)
-        result = 31 * result + (isDefault?.hashCode() ?: 0)
+        result = 31 * result + returnType.hashCode()
+        result = 31 * result + isBridge.hashCode()
+        result = 31 * result + isDefault.hashCode()
         return result
     }
 }
@@ -463,8 +463,8 @@ class FieldMatcher : MemberMatcher() {
 
     override fun hashCode(): Int {
         var result = super.hashCode()
-        result = 31 * result + (type?.hashCode() ?: 0)
-        result = 31 * result + (isEnumConstant?.hashCode() ?: 0)
+        result = 31 * result + type.hashCode()
+        result = 31 * result + isEnumConstant.hashCode()
         return result
     }
 }
