@@ -5,6 +5,7 @@ import cc.meteormc.xposedkit.plugin.util.XmlUtil
 import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty
+import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
@@ -14,6 +15,7 @@ import java.util.Properties
 import javax.xml.stream.XMLStreamConstants
 import kotlin.math.max
 
+@CacheableTask
 abstract class GenerateResourcesTask : BaseTask() {
     companion object {
         private const val SCOPES_RESOURCE_NAME = "module_scopes"

@@ -5,6 +5,7 @@ import cc.meteormc.xposedkit.plugin.util.XmlUtil
 import org.gradle.api.file.RegularFile
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
+import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
@@ -13,6 +14,7 @@ import javax.xml.transform.TransformerFactory
 import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
 
+@CacheableTask
 abstract class GenerateManifestTask : BaseTask() {
     companion object {
         private const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
