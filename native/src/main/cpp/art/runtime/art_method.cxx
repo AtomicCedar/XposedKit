@@ -7,8 +7,7 @@ import :symbol_resolver;
 
 namespace xposedkit::art {
 
-    export class ArtMethod {
-
-    };
+export class ArtMethod {
+};
 
 }

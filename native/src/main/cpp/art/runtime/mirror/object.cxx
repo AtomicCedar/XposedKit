@@ -7,8 +7,7 @@ import :symbol_resolver;
 
 namespace xposedkit::art::mirror {
 
-    export class Object {
-
-    };
+export class Object {
+};
 
 }

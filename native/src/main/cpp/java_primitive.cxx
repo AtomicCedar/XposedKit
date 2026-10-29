@@ -1,6 +1,6 @@
 module;
 
-#include "jni.h"
+#include <jni.h>
 
 export module xposedkit:java_primitive;
 
@@ -22,59 +22,63 @@ enum class PrimitiveType {
 };
 
 auto GetPrimitiveType(JNIEnv* env, jclass clazz) {
+    using enum PrimitiveType;
     if (env->IsSameObject(clazz, Class_Boolean))
-        return PrimitiveType::Boolean;
+        return Boolean;
 
     if (env->IsSameObject(clazz, Class_Byte))
-        return PrimitiveType::Byte;
+        return Byte;
 
     if (env->IsSameObject(clazz, Class_Char))
-        return PrimitiveType::Char;
+        return Char;
 
     if (env->IsSameObject(clazz, Class_Short))
-        return PrimitiveType::Short;
+        return Short;
 
     if (env->IsSameObject(clazz, Class_Int))
-        return PrimitiveType::Int;
+        return Int;
 
     if (env->IsSameObject(clazz, Class_Long))
-        return PrimitiveType::Long;
+        return Long;
 
     if (env->IsSameObject(clazz, Class_Float))
-        return PrimitiveType::Float;
+        return Float;
 
     if (env->IsSameObject(clazz, Class_Double))
-        return PrimitiveType::Double;
+        return Double;
 
     if (env->IsSameObject(clazz, Class_Void))
-        return PrimitiveType::Void;
+        return Void;
 
-    return PrimitiveType::Object;
+    return Object;
 }
 
 jobject FromPrimitiveType(JNIEnv* env, PrimitiveType type, jvalue value) {
+    using enum PrimitiveType;
     switch (type) {
-        case PrimitiveType::Object:
+        case Object:
             return value.l;
-        case PrimitiveType::Boolean:
+        case Boolean:
             return env->CallStaticObjectMethod(Class_Boolean, Method_Boolean_boxing, value.z);
-        case PrimitiveType::Byte:
+        case Byte:
             return env->CallStaticObjectMethod(Class_Byte, Method_Byte_boxing, value.b);
-        case PrimitiveType::Char:
+        case Char:
             return env->CallStaticObjectMethod(Class_Char, Method_Char_boxing, value.c);
-        case PrimitiveType::Short:
+        case Short:
             return env->CallStaticObjectMethod(Class_Short, Method_Short_boxing, value.s);
-        case PrimitiveType::Int:
+        case Int:
             return env->CallStaticObjectMethod(Class_Int, Method_Int_boxing, value.i);
-        case PrimitiveType::Long:
+        case Long:
             return env->CallStaticObjectMethod(Class_Long, Method_Long_boxing, value.j);
-        case PrimitiveType::Float:
+        case Float:
             return env->CallStaticObjectMethod(Class_Float, Method_Float_boxing, value.f);
-        case PrimitiveType::Double:
+        case Double:
             return env->CallStaticObjectMethod(Class_Double, Method_Double_boxing, value.d);
-        case PrimitiveType::Void:
+        case Void:
             return nullptr;
     }
+
+    return nullptr;
 }
 
 jobject FromPrimitiveType(JNIEnv* env, jclass clazz, jvalue value) {
@@ -83,35 +87,36 @@ jobject FromPrimitiveType(JNIEnv* env, jclass clazz, jvalue value) {
 
 jvalue ToPrimitiveType(JNIEnv* env, PrimitiveType type, jobject value) {
     jvalue jv{};
+    using enum PrimitiveType;
     switch (type) {
-        case PrimitiveType::Object:
+        case Object:
             jv.l = value;
             break;
-        case PrimitiveType::Boolean:
+        case Boolean:
             jv.z = env->CallBooleanMethod(value, Method_Boolean_unboxing);
             break;
-        case PrimitiveType::Byte:
+        case Byte:
             jv.b = env->CallByteMethod(value, Method_Byte_unboxing);
             break;
-        case PrimitiveType::Char:
+        case Char:
             jv.c = env->CallCharMethod(value, Method_Char_unboxing);
             break;
-        case PrimitiveType::Short:
+        case Short:
             jv.s = env->CallShortMethod(value, Method_Short_unboxing);
             break;
-        case PrimitiveType::Int:
+        case Int:
             jv.i = env->CallIntMethod(value, Method_Int_unboxing);
             break;
-        case PrimitiveType::Long:
+        case Long:
             jv.j = env->CallLongMethod(value, Method_Long_unboxing);
             break;
-        case PrimitiveType::Float:
+        case Float:
             jv.f = env->CallFloatMethod(value, Method_Float_unboxing);
             break;
-        case PrimitiveType::Double:
+        case Double:
             jv.d = env->CallDoubleMethod(value, Method_Double_unboxing);
             break;
-        case PrimitiveType::Void:
+        case Void:
             break;
     }
 
@@ -122,4 +127,4 @@ jvalue ToPrimitiveType(JNIEnv* env, jclass clazz, jobject value) {
     return ToPrimitiveType(env, GetPrimitiveType(env, clazz), value);
 }
 
-}
+}  // namespace xposedkit
